@@ -244,6 +244,14 @@ int net_eq(const struct net *net1, const struct net *net2)
 #define net_drop_ns NULL
 #endif
 
+static inline struct afnetns *net_afnetns(struct net *net)
+{
+#if IS_ENABLED(CONFIG_AFNETNS)
+	return net->afnet_ns;
+#else
+	return NULL;
+#endif
+}
 
 typedef struct {
 #ifdef CONFIG_NET_NS
