@@ -273,6 +273,26 @@ out_rcu_unlock:
 	goto out;
 }
 
+static int inet6_allow_bind(struct net *net, struct in6_addr *addr,
+			    unsigned short snum, struct net_device *dev)
+{
+	struct user_namespace *user_ns;
+#if IS_ENABLED(CONFIG_AFNETNS)
+	struct afnetns *afnetns;
+
+	afnetns = ipv6_get_ifaddr_afnetns_rcu(net, addr, dev);
+	user_ns = afnetns ? afnetns->user_ns : net->user_ns;
+#else
+	user_ns = net->user_ns;
+#endif
+
+	if (snum && snum < inet_prot_sock(net) &&
+	    !ns_capable(user_ns, CAP_NET_BIND_SERVICE))
+		return -EADDRNOTAVAIL;
+
+	return 0;
+}
+
 
 /* bind for INET6 API */
 int inet6_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
@@ -301,11 +321,6 @@ int inet6_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	if ((addr_type & IPV6_ADDR_MULTICAST) && sock->type == SOCK_STREAM)
 		return -EINVAL;
 
-	snum = ntohs(addr->sin6_port);
-	if (snum && snum < inet_prot_sock(net) &&
-	    !ns_capable(net->user_ns, CAP_NET_BIND_SERVICE))
-		return -EACCES;
-
 	lock_sock(sk);
 
 	/* Check these errors (active socket, double bind). */
@@ -313,6 +328,8 @@ int inet6_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		err = -EINVAL;
 		goto out;
 	}
+
+	snum = ntohs(addr->sin6_port);
 
 	/* Check if the address belongs to the host. */
 	if (addr_type == IPV6_ADDR_MAPPED) {
@@ -330,10 +347,12 @@ int inet6_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		else
 			err = 0;
 	} else {
-		if (addr_type != IPV6_ADDR_ANY) {
-			struct net_device *dev = NULL;
+		struct net_device *dev = NULL;
 
-			rcu_read_lock();
+		rcu_read_lock();
+
+		if (addr_type != IPV6_ADDR_ANY) {
+
 			if (__ipv6_addr_needs_scope_id(addr_type)) {
 				if (addr_len >= sizeof(struct sockaddr_in6) &&
 				    addr->sin6_scope_id) {
@@ -371,8 +390,13 @@ int inet6_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 					goto out_unlock;
 				}
 			}
-			rcu_read_unlock();
 		}
+
+		err = inet6_allow_bind(net, &addr->sin6_addr, snum, dev);
+		if (err)
+			goto out_unlock;
+
+		rcu_read_unlock();
 	}
 
 	inet->inet_rcv_saddr = v4addr;
