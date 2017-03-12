@@ -56,6 +56,7 @@ void afnetns_free(struct afnetns *afnetns)
 	put_net(afnetns->net);
 	kfree(afnetns);
 }
+EXPORT_SYMBOL(afnetns_free);
 
 struct afnetns *afnetns_get_by_fd(int fd)
 {
@@ -76,11 +77,13 @@ struct afnetns *afnetns_get_by_fd(int fd)
 	fput(file);
 	return afnetns;
 }
+EXPORT_SYMBOL(afnetns_get_by_fd);
 
 unsigned int afnetns_to_inode(struct afnetns *afnetns)
 {
 	return afnetns->ns.inum;
 }
+EXPORT_SYMBOL(afnetns_to_inode);
 
 struct afnetns *copy_afnet_ns(unsigned long flags, struct nsproxy *old)
 {
