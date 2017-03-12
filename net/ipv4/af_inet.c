@@ -428,6 +428,35 @@ int inet_release(struct socket *sock)
 }
 EXPORT_SYMBOL(inet_release);
 
+int inet_allow_bind(struct sock *sk, __be32 addr)
+{
+	struct inet_sock *inet = inet_sk(sk);
+	struct net *net = sock_net(sk);
+	u32 tb_id = RT_TABLE_LOCAL;
+	int chk_addr_ret;
+
+	tb_id = l3mdev_fib_table_by_index(net, sk->sk_bound_dev_if) ? : tb_id;
+	chk_addr_ret = inet_addr_type_table(net, addr, tb_id);
+
+	/* Not specified by any standard per-se, however it breaks too
+	 * many applications when removed.  It is unfortunate since
+	 * allowing applications to make a non-local bind solves
+	 * several problems with systems using dynamic addressing.
+	 * (ie. your servers still start up even if your ISDN link
+	 *  is temporarily down)
+	 */
+	if (!net->ipv4.sysctl_ip_nonlocal_bind &&
+	    !(inet->freebind || inet->transparent) &&
+	    addr != htonl(INADDR_ANY) &&
+	    chk_addr_ret != RTN_LOCAL &&
+	    chk_addr_ret != RTN_MULTICAST &&
+	    chk_addr_ret != RTN_BROADCAST)
+		return -EADDRNOTAVAIL;
+
+	return chk_addr_ret;
+}
+EXPORT_SYMBOL(inet_allow_bind);
+
 int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 {
 	struct sockaddr_in *addr = (struct sockaddr_in *)uaddr;
@@ -436,7 +465,6 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	struct net *net = sock_net(sk);
 	unsigned short snum;
 	int chk_addr_ret;
-	u32 tb_id = RT_TABLE_LOCAL;
 	int err;
 
 	/* If the socket has its own bind function then use it. (RAW) */
@@ -458,24 +486,11 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 			goto out;
 	}
 
-	tb_id = l3mdev_fib_table_by_index(net, sk->sk_bound_dev_if) ? : tb_id;
-	chk_addr_ret = inet_addr_type_table(net, addr->sin_addr.s_addr, tb_id);
-
-	/* Not specified by any standard per-se, however it breaks too
-	 * many applications when removed.  It is unfortunate since
-	 * allowing applications to make a non-local bind solves
-	 * several problems with systems using dynamic addressing.
-	 * (ie. your servers still start up even if your ISDN link
-	 *  is temporarily down)
-	 */
-	err = -EADDRNOTAVAIL;
-	if (!net->ipv4.sysctl_ip_nonlocal_bind &&
-	    !(inet->freebind || inet->transparent) &&
-	    addr->sin_addr.s_addr != htonl(INADDR_ANY) &&
-	    chk_addr_ret != RTN_LOCAL &&
-	    chk_addr_ret != RTN_MULTICAST &&
-	    chk_addr_ret != RTN_BROADCAST)
+	chk_addr_ret = inet_allow_bind(sk, addr->sin_addr.s_addr);
+	if (chk_addr_ret < 0) {
+		err = chk_addr_ret;
 		goto out;
+	}
 
 	snum = ntohs(addr->sin_port);
 	err = -EACCES;
