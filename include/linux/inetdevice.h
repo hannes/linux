@@ -159,6 +159,7 @@ int unregister_inetaddr_notifier(struct notifier_block *nb);
 void inet_netconf_notify_devconf(struct net *net, int type, int ifindex,
 				 struct ipv4_devconf *devconf);
 
+struct in_ifaddr *ifa_find_rcu(struct net *net, __be32 addr);
 struct net_device *__ip_dev_find(struct net *net, __be32 addr, bool devref);
 static inline struct net_device *ip_dev_find(struct net *net, __be32 addr)
 {

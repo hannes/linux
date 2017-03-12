@@ -128,6 +128,20 @@ static void inet_hash_remove(struct in_ifaddr *ifa)
 	hlist_del_init_rcu(&ifa->hash);
 }
 
+struct in_ifaddr *ifa_find_rcu(struct net *net, __be32 addr)
+{
+	u32 hash = inet_addr_hash(net, addr);
+	struct in_ifaddr *ifa;
+
+	hlist_for_each_entry_rcu(ifa, &inet_addr_lst[hash], hash) {
+		if (ifa->ifa_local == addr &&
+		    net_eq(dev_net(ifa->ifa_dev->dev), net))
+			return ifa;
+	}
+
+	return NULL;
+}
+
 /**
  * __ip_dev_find - find the first device with a given source address.
  * @net: the net namespace
@@ -138,21 +152,12 @@ static void inet_hash_remove(struct in_ifaddr *ifa)
  */
 struct net_device *__ip_dev_find(struct net *net, __be32 addr, bool devref)
 {
-	u32 hash = inet_addr_hash(net, addr);
-	struct net_device *result = NULL;
+	struct net_device *result;
 	struct in_ifaddr *ifa;
 
 	rcu_read_lock();
-	hlist_for_each_entry_rcu(ifa, &inet_addr_lst[hash], hash) {
-		if (ifa->ifa_local == addr) {
-			struct net_device *dev = ifa->ifa_dev->dev;
-
-			if (!net_eq(dev_net(dev), net))
-				continue;
-			result = dev;
-			break;
-		}
-	}
+	ifa = ifa_find_rcu(net, addr);
+	result = ifa ? ifa->ifa_dev->dev : NULL;
 	if (!result) {
 		struct flowi4 fl4 = { .daddr = addr };
 		struct fib_result res = { 0 };
