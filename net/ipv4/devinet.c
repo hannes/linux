@@ -1224,7 +1224,17 @@ out:
 	return done;
 }
 
-__be32 inet_select_addr(const struct net_device *dev, __be32 dst, int scope)
+static struct afnetns *ifa_afnetns(struct in_ifaddr *ifa)
+{
+#if IS_ENABLED(CONFIG_AFNETNS)
+	return ifa->afnetns;
+#else
+	return NULL;
+#endif
+}
+
+__be32 __inet_select_addr(const struct net_device *dev, __be32 dst,
+			  int scope, struct afnetns *afnetns)
 {
 	__be32 addr = 0;
 	struct in_device *in_dev;
@@ -1237,6 +1247,8 @@ __be32 inet_select_addr(const struct net_device *dev, __be32 dst, int scope)
 		goto no_in_dev;
 
 	for_primary_ifa(in_dev) {
+		if (afnetns && afnetns != ifa_afnetns(ifa))
+			continue;
 		if (ifa->ifa_scope > scope)
 			continue;
 		if (!dst || inet_ifa_match(dst, ifa)) {
@@ -1262,7 +1274,8 @@ no_in_dev:
 	    (in_dev = __in_dev_get_rcu(dev))) {
 		for_primary_ifa(in_dev) {
 			if (ifa->ifa_scope != RT_SCOPE_LINK &&
-			    ifa->ifa_scope <= scope) {
+			    ifa->ifa_scope <= scope &&
+			    (!afnetns || afnetns == ifa_afnetns(ifa))) {
 				addr = ifa->ifa_local;
 				goto out_unlock;
 			}
@@ -1283,7 +1296,8 @@ no_in_dev:
 
 		for_primary_ifa(in_dev) {
 			if (ifa->ifa_scope != RT_SCOPE_LINK &&
-			    ifa->ifa_scope <= scope) {
+			    ifa->ifa_scope <= scope &&
+			    (!afnetns || afnetns == ifa_afnetns(ifa))) {
 				addr = ifa->ifa_local;
 				goto out_unlock;
 			}
@@ -1292,6 +1306,13 @@ no_in_dev:
 out_unlock:
 	rcu_read_unlock();
 	return addr;
+}
+EXPORT_SYMBOL(__inet_select_addr);
+
+__be32 inet_select_addr(const struct net_device *dev, __be32 dst,
+			int scope)
+{
+	return __inet_select_addr(dev, dst, scope, NULL);
 }
 EXPORT_SYMBOL(inet_select_addr);
 
