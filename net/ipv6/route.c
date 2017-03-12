@@ -2007,7 +2007,7 @@ static struct rt6_info *ip6_route_info_create(struct fib6_config *cfg)
 		 * prefix route was assigned to, which might be non-loopback.
 		 */
 		err = -EINVAL;
-		if (ipv6_chk_addr_and_flags(net, gw_addr,
+		if (ipv6_chk_addr_and_flags(net, NULL, gw_addr,
 					    gwa_type & IPV6_ADDR_LINKLOCAL ?
 					    dev : NULL, 0, 0))
 			goto out;

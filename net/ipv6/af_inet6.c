@@ -362,8 +362,11 @@ int inet6_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 			if (!(addr_type & IPV6_ADDR_MULTICAST))	{
 				if (!net->ipv6.sysctl.ip_nonlocal_bind &&
 				    !(inet->freebind || inet->transparent) &&
-				    !ipv6_chk_addr(net, &addr->sin6_addr,
-						   dev, 0)) {
+				    !ipv6_chk_addr_and_flags(net,
+							     sock_afnetns(sk),
+							     &addr->sin6_addr,
+							     dev, 0,
+							     IFA_F_TENTATIVE)) {
 					err = -EADDRNOTAVAIL;
 					goto out_unlock;
 				}

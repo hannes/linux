@@ -1776,11 +1776,13 @@ static int ipv6_count_addresses(struct inet6_dev *idev)
 int ipv6_chk_addr(struct net *net, const struct in6_addr *addr,
 		  const struct net_device *dev, int strict)
 {
-	return ipv6_chk_addr_and_flags(net, addr, dev, strict, IFA_F_TENTATIVE);
+	return ipv6_chk_addr_and_flags(net, NULL, addr, dev, strict,
+				       IFA_F_TENTATIVE);
 }
 EXPORT_SYMBOL(ipv6_chk_addr);
 
-int ipv6_chk_addr_and_flags(struct net *net, const struct in6_addr *addr,
+int ipv6_chk_addr_and_flags(struct net *net, struct afnetns *afnetns,
+			    const struct in6_addr *addr,
 			    const struct net_device *dev, int strict,
 			    u32 banned_flags)
 {
@@ -1792,6 +1794,12 @@ int ipv6_chk_addr_and_flags(struct net *net, const struct in6_addr *addr,
 	hlist_for_each_entry_rcu(ifp, &inet6_addr_lst[hash], addr_lst) {
 		if (!net_eq(dev_net(ifp->idev->dev), net))
 			continue;
+
+#if IS_ENABLED(CONFIG_AFNETNS)
+		if (afnetns && ifp->afnetns != afnetns)
+			continue;
+#endif
+
 		/* Decouple optimistic from tentative for evaluation here.
 		 * Ban optimistic addresses explicitly, when required.
 		 */
