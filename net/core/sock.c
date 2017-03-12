@@ -1458,6 +1458,12 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		if (likely(sk->sk_net_refcnt))
 			get_net(net);
 		sock_net_set(sk, net);
+#if IS_ENABLED(CONFIG_AFNETNS)
+		if (likely(sk->sk_net_refcnt))
+			sk->sk_afnet = afnetns_get(current->nsproxy->afnet_ns);
+		else
+			sk->sk_afnet = net->afnet_ns;
+#endif
 		atomic_set(&sk->sk_wmem_alloc, 1);
 
 		mem_cgroup_sk_alloc(sk);
@@ -1499,8 +1505,12 @@ static void __sk_destruct(struct rcu_head *head)
 	if (sk->sk_peer_cred)
 		put_cred(sk->sk_peer_cred);
 	put_pid(sk->sk_peer_pid);
-	if (likely(sk->sk_net_refcnt))
+	if (likely(sk->sk_net_refcnt)) {
 		put_net(sock_net(sk));
+#if IS_ENABLED(CONFIG_AFNETNS)
+		afnetns_put(sk->sk_afnet);
+#endif
+	}
 	sk_prot_free(sk->sk_prot_creator, sk);
 }
 
@@ -1572,8 +1582,12 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 		sock_copy(newsk, sk);
 
 		/* SANITY */
-		if (likely(newsk->sk_net_refcnt))
+		if (likely(newsk->sk_net_refcnt)) {
 			get_net(sock_net(newsk));
+#if IS_ENABLED(CONFIG_AFNETNS)
+			afnetns_get(newsk->sk_afnet);
+#endif
+		}
 		sk_node_init(&newsk->sk_node);
 		sock_lock_init(newsk);
 		bh_lock_sock(newsk);

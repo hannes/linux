@@ -183,6 +183,9 @@ struct sock_common {
 	};
 	struct proto		*skc_prot;
 	possible_net_t		skc_net;
+#if IS_ENABLED(CONFIG_AFNETNS)
+	struct afnetns		*skc_afnet;
+#endif
 
 #if IS_ENABLED(CONFIG_IPV6)
 	struct in6_addr		skc_v6_daddr;
@@ -337,6 +340,7 @@ struct sock {
 #define sk_bind_node		__sk_common.skc_bind_node
 #define sk_prot			__sk_common.skc_prot
 #define sk_net			__sk_common.skc_net
+#define sk_afnet		__sk_common.skc_afnet
 #define sk_v6_daddr		__sk_common.skc_v6_daddr
 #define sk_v6_rcv_saddr	__sk_common.skc_v6_rcv_saddr
 #define sk_cookie		__sk_common.skc_cookie
