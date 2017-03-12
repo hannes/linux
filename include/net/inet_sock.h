@@ -81,6 +81,7 @@ struct inet_request_sock {
 #define ir_iif			req.__req_common.skc_bound_dev_if
 #define ir_cookie		req.__req_common.skc_cookie
 #define ireq_net		req.__req_common.skc_net
+#define ireq_afnet		req.__req_common.skc_afnet
 #define ireq_state		req.__req_common.skc_state
 #define ireq_family		req.__req_common.skc_family
 
