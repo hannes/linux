@@ -180,6 +180,17 @@ static __inline__ bool inet_ifa_match(__be32 addr, struct in_ifaddr *ifa)
 	return !((addr^ifa->ifa_address)&ifa->ifa_mask);
 }
 
+static inline struct afnetns *ifa_find_afnetns_rcu(struct net *net, __be32 addr)
+{
+#if IS_ENABLED(CONFIG_AFNETNS)
+	struct in_ifaddr *ifa = ifa_find_rcu(net, addr);
+
+	return ifa ? ifa->afnetns : net->afnet_ns;
+#else
+	return NULL;
+#endif
+}
+
 /*
  *	Check if a mask is acceptable.
  */
