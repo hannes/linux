@@ -2293,6 +2293,15 @@ struct net *sock_net(const struct sock *sk)
 	return read_pnet(&sk->sk_net);
 }
 
+static inline struct afnetns *sock_afnetns(const struct sock *sk)
+{
+#if IS_ENABLED(CONFIG_AFNETNS)
+	return sk->sk_afnet;
+#else
+	return NULL;
+#endif
+}
+
 static inline
 void sock_net_set(struct sock *sk, struct net *net)
 {
