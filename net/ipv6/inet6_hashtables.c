@@ -87,6 +87,7 @@ struct sock *__inet6_lookup_established(struct net *net,
 					   const u16 hnum,
 					   const int dif)
 {
+	struct afnetns *afnetns;
 	struct sock *sk;
 	const struct hlist_nulls_node *node;
 	const __portpair ports = INET_COMBINED_PORTS(sport, hnum);
@@ -97,10 +98,14 @@ struct sock *__inet6_lookup_established(struct net *net,
 	unsigned int slot = hash & hashinfo->ehash_mask;
 	struct inet_ehash_bucket *head = &hashinfo->ehash[slot];
 
+	afnetns = ipv6_get_ifaddr_afnetns_rcu(net, daddr,
+					      dev_get_by_index_rcu(net, dif));
 
 begin:
 	sk_nulls_for_each_rcu(sk, node, &head->chain) {
 		if (sk->sk_hash != hash)
+			continue;
+		if (sock_afnetns(sk) != afnetns)
 			continue;
 		if (!INET6_MATCH(sk, net, saddr, daddr, ports, dif))
 			continue;
@@ -123,14 +128,15 @@ found:
 EXPORT_SYMBOL(__inet6_lookup_established);
 
 static inline int compute_score(struct sock *sk, struct net *net,
+				struct afnetns *afnetns,
 				const unsigned short hnum,
 				const struct in6_addr *daddr,
 				const int dif, bool exact_dif)
 {
 	int score = -1;
 
-	if (net_eq(sock_net(sk), net) && inet_sk(sk)->inet_num == hnum &&
-	    sk->sk_family == PF_INET6) {
+	if (net_eq(sock_net(sk), net) && sock_afnetns(sk) == afnetns &&
+	    inet_sk(sk)->inet_num == hnum && sk->sk_family == PF_INET6) {
 
 		score = 1;
 		if (!ipv6_addr_any(&sk->sk_v6_rcv_saddr)) {
@@ -162,10 +168,14 @@ struct sock *inet6_lookup_listener(struct net *net,
 	int score, hiscore = 0, matches = 0, reuseport = 0;
 	bool exact_dif = inet6_exact_dif_match(net, skb);
 	struct sock *sk, *result = NULL;
+	struct afnetns *afnetns;
 	u32 phash = 0;
 
+	afnetns = ipv6_get_ifaddr_afnetns_rcu(net, daddr, skb->dev);
+
 	sk_for_each(sk, &ilb->head) {
-		score = compute_score(sk, net, hnum, daddr, dif, exact_dif);
+		score = compute_score(sk, net, afnetns, hnum, daddr, dif,
+				      exact_dif);
 		if (score > hiscore) {
 			reuseport = sk->sk_reuseport;
 			if (reuseport) {
