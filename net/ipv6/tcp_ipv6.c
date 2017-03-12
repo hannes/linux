@@ -1944,7 +1944,8 @@ static struct inet_protosw tcpv6_protosw = {
 	.prot		=	&tcpv6_prot,
 	.ops		=	&inet6_stream_ops,
 	.flags		=	INET_PROTOSW_PERMANENT |
-				INET_PROTOSW_ICSK,
+				INET_PROTOSW_ICSK |
+				INET_PROTOSW_AFNETNS_OK,
 };
 
 static int __net_init tcpv6_net_init(struct net *net)

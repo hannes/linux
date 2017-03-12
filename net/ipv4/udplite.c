@@ -69,7 +69,8 @@ static struct inet_protosw udplite4_protosw = {
 	.protocol	=  IPPROTO_UDPLITE,
 	.prot		=  &udplite_prot,
 	.ops		=  &inet_dgram_ops,
-	.flags		=  INET_PROTOSW_PERMANENT,
+	.flags		=  INET_PROTOSW_PERMANENT |
+			   INET_PROTOSW_AFNETNS_OK,
 };
 
 #ifdef CONFIG_PROC_FS

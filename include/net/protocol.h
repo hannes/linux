@@ -91,6 +91,7 @@ struct inet_protosw {
 #define INET_PROTOSW_REUSE 0x01	     /* Are ports automatically reusable? */
 #define INET_PROTOSW_PERMANENT 0x02  /* Permanent protocols are unremovable. */
 #define INET_PROTOSW_ICSK      0x04  /* Is this an inet_connection_sock? */
+#define INET_PROTOSW_AFNETNS_OK 0x08 /* Is this proto afnetns compatible? */
 
 extern const struct net_protocol __rcu *inet_protos[MAX_INET_PROTOS];
 extern const struct net_offload __rcu *inet_offloads[MAX_INET_PROTOS];

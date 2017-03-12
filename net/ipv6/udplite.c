@@ -63,7 +63,8 @@ static struct inet_protosw udplite6_protosw = {
 	.protocol	= IPPROTO_UDPLITE,
 	.prot		= &udplitev6_prot,
 	.ops		= &inet6_dgram_ops,
-	.flags		= INET_PROTOSW_PERMANENT,
+	.flags		= INET_PROTOSW_PERMANENT |
+			  INET_PROTOSW_AFNETNS_OK,
 };
 
 int __init udplitev6_init(void)

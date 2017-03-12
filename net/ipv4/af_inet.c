@@ -302,14 +302,22 @@ lookup_protocol:
 			goto out_rcu_unlock;
 	}
 
+	sock->ops = answer->ops;
+	answer_prot = answer->prot;
+	answer_flags = answer->flags;
+
 	err = -EPERM;
 	if (sock->type == SOCK_RAW && !kern &&
 	    !ns_capable(net->user_ns, CAP_NET_RAW))
 		goto out_rcu_unlock;
 
-	sock->ops = answer->ops;
-	answer_prot = answer->prot;
-	answer_flags = answer->flags;
+#if IS_ENABLED(CONFIG_AFNETNS)
+	if (unlikely(!kern &&
+		     current->nsproxy->afnet_ns != net->afnet_ns &&
+		     !(answer_flags & INET_PROTOSW_AFNETNS_OK)))
+		goto out_rcu_unlock;
+#endif
+
 	rcu_read_unlock();
 
 	WARN_ON(!answer_prot->slab);
@@ -1060,7 +1068,8 @@ static struct inet_protosw inetsw_array[] =
 		.prot =       &tcp_prot,
 		.ops =        &inet_stream_ops,
 		.flags =      INET_PROTOSW_PERMANENT |
-			      INET_PROTOSW_ICSK,
+			      INET_PROTOSW_ICSK |
+			      INET_PROTOSW_AFNETNS_OK,
 	},
 
 	{
@@ -1068,7 +1077,8 @@ static struct inet_protosw inetsw_array[] =
 		.protocol =   IPPROTO_UDP,
 		.prot =       &udp_prot,
 		.ops =        &inet_dgram_ops,
-		.flags =      INET_PROTOSW_PERMANENT,
+		.flags =      INET_PROTOSW_PERMANENT |
+			      INET_PROTOSW_AFNETNS_OK,
        },
 
        {

@@ -167,14 +167,22 @@ lookup_protocol:
 			goto out_rcu_unlock;
 	}
 
+	sock->ops = answer->ops;
+	answer_prot = answer->prot;
+	answer_flags = answer->flags;
+
 	err = -EPERM;
 	if (sock->type == SOCK_RAW && !kern &&
 	    !ns_capable(net->user_ns, CAP_NET_RAW))
 		goto out_rcu_unlock;
 
-	sock->ops = answer->ops;
-	answer_prot = answer->prot;
-	answer_flags = answer->flags;
+#if IS_ENABLED(CONFIG_AFNETNS)
+	if (unlikely(!kern &&
+		     current->nsproxy->afnet_ns != net->afnet_ns &&
+		     !(answer_flags & INET_PROTOSW_AFNETNS_OK)))
+		goto out_rcu_unlock;
+#endif
+
 	rcu_read_unlock();
 
 	WARN_ON(!answer_prot->slab);
