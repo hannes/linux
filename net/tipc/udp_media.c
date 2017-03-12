@@ -688,7 +688,7 @@ static int tipc_udp_enable(struct net *net, struct tipc_bearer *b,
 	if (local.proto == htons(ETH_P_IP)) {
 		struct net_device *dev;
 
-		dev = __ip_dev_find(net, local.ipv4.s_addr, false);
+		dev = __ip_dev_find(net, NULL, local.ipv4.s_addr, false);
 		if (!dev) {
 			err = -ENODEV;
 			goto err;

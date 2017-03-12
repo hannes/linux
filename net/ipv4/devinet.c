@@ -150,14 +150,27 @@ struct in_ifaddr *ifa_find_rcu(struct net *net, __be32 addr)
  *
  * If a caller uses devref=false, it should be protected by RCU, or RTNL
  */
-struct net_device *__ip_dev_find(struct net *net, __be32 addr, bool devref)
+struct net_device *__ip_dev_find(struct net *net, struct afnetns *afnetns,
+				 __be32 addr, bool devref)
 {
-	struct net_device *result;
+	struct net_device *result = NULL;
 	struct in_ifaddr *ifa;
 
 	rcu_read_lock();
 	ifa = ifa_find_rcu(net, addr);
-	result = ifa ? ifa->ifa_dev->dev : NULL;
+#if IS_ENABLED(CONFIG_AFNETNS)
+	if (afnetns && afnetns != net->afnet_ns) {
+		/* we are in a child namespace, thus only allow to
+		 * explicitly configured addresses
+		 */
+		if (!ifa || ifa->afnetns != afnetns) {
+			rcu_read_unlock();
+			return NULL;
+		}
+	}
+#endif
+	if (ifa)
+		result = ifa->ifa_dev->dev;
 	if (!result) {
 		struct flowi4 fl4 = { .daddr = addr };
 		struct fib_result res = { 0 };

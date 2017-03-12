@@ -1754,7 +1754,7 @@ static struct in_device *ip_mc_find_dev(struct net *net, struct ip_mreqn *imr)
 		return idev;
 	}
 	if (imr->imr_address.s_addr) {
-		dev = __ip_dev_find(net, imr->imr_address.s_addr, false);
+		dev = __ip_dev_find(net, NULL, imr->imr_address.s_addr, false);
 		if (!dev)
 			return NULL;
 	}

@@ -266,7 +266,7 @@ static struct net_device *cxgbit_ipv4_netdev(__be32 saddr)
 {
 	struct net_device *ndev;
 
-	ndev = __ip_dev_find(&init_net, saddr, false);
+	ndev = __ip_dev_find(&init_net, NULL, saddr, false);
 	if (!ndev)
 		return NULL;
 

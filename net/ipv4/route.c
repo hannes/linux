@@ -1045,7 +1045,7 @@ void ipv4_update_pmtu(struct sk_buff *skb, struct net *net, u32 mtu,
 
 	__build_flow_key(net, &fl4, NULL, iph, oif,
 			 RT_TOS(iph->tos), protocol, mark, flow_flags);
-	rt = __ip_route_output_key(net, &fl4);
+	rt = __ip_route_output_key(net, NULL, &fl4);
 	if (!IS_ERR(rt)) {
 		__ip_rt_update_pmtu(rt, &fl4, mtu);
 		ip_rt_put(rt);
@@ -1064,7 +1064,7 @@ static void __ipv4_sk_update_pmtu(struct sk_buff *skb, struct sock *sk, u32 mtu)
 	if (!fl4.flowi4_mark)
 		fl4.flowi4_mark = IP4_REPLY_MARK(sock_net(sk), skb->mark);
 
-	rt = __ip_route_output_key(sock_net(sk), &fl4);
+	rt = __ip_route_output_key(sock_net(sk), NULL, &fl4);
 	if (!IS_ERR(rt)) {
 		__ip_rt_update_pmtu(rt, &fl4, mtu);
 		ip_rt_put(rt);
@@ -1134,7 +1134,7 @@ void ipv4_redirect(struct sk_buff *skb, struct net *net,
 
 	__build_flow_key(net, &fl4, NULL, iph, oif,
 			 RT_TOS(iph->tos), protocol, mark, flow_flags);
-	rt = __ip_route_output_key(net, &fl4);
+	rt = __ip_route_output_key(net, NULL, &fl4);
 	if (!IS_ERR(rt)) {
 		__ip_do_redirect(rt, skb, &fl4, false);
 		ip_rt_put(rt);
@@ -1150,7 +1150,7 @@ void ipv4_sk_redirect(struct sk_buff *skb, struct sock *sk)
 	struct net *net = sock_net(sk);
 
 	__build_flow_key(net, &fl4, sk, iph, 0, 0, 0, 0, 0);
-	rt = __ip_route_output_key(net, &fl4);
+	rt = __ip_route_output_key(net, NULL, &fl4);
 	if (!IS_ERR(rt)) {
 		__ip_do_redirect(rt, skb, &fl4, false);
 		ip_rt_put(rt);
@@ -2202,8 +2202,9 @@ add:
  * Major route resolver routine.
  */
 
-struct rtable *__ip_route_output_key_hash(struct net *net, struct flowi4 *fl4,
-					  int mp_hash)
+struct rtable *__ip_route_output_key_hash(struct net *net,
+					  struct afnetns *afnetns,
+					  struct flowi4 *fl4, int mp_hash)
 {
 	struct net_device *dev_out = NULL;
 	__u8 tos = RT_FL_TOS(fl4);
@@ -2244,7 +2245,7 @@ struct rtable *__ip_route_output_key_hash(struct net *net, struct flowi4 *fl4,
 		    (ipv4_is_multicast(fl4->daddr) ||
 		     ipv4_is_lbcast(fl4->daddr))) {
 			/* It is equivalent to inet_addr_type(saddr) == RTN_LOCAL */
-			dev_out = __ip_dev_find(net, fl4->saddr, false);
+			dev_out = __ip_dev_find(net, NULL, fl4->saddr, false);
 			if (!dev_out)
 				goto out;
 
@@ -2269,7 +2270,7 @@ struct rtable *__ip_route_output_key_hash(struct net *net, struct flowi4 *fl4,
 
 		if (!(fl4->flowi4_flags & FLOWI_FLAG_ANYSRC)) {
 			/* It is equivalent to inet_addr_type(saddr) == RTN_LOCAL */
-			if (!__ip_dev_find(net, fl4->saddr, false))
+			if (!__ip_dev_find(net, afnetns, fl4->saddr, false))
 				goto out;
 		}
 	}
@@ -2458,7 +2459,9 @@ struct dst_entry *ipv4_blackhole_route(struct net *net, struct dst_entry *dst_or
 struct rtable *ip_route_output_flow(struct net *net, struct flowi4 *flp4,
 				    const struct sock *sk)
 {
-	struct rtable *rt = __ip_route_output_key(net, flp4);
+	struct rtable *rt;
+
+	rt = __ip_route_output_key(net, sk ? sock_afnetns(sk) : NULL, flp4);
 
 	if (IS_ERR(rt))
 		return rt;
