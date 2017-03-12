@@ -30,6 +30,7 @@
 #include <linux/ns_common.h>
 #include <linux/idr.h>
 #include <linux/skbuff.h>
+#include <net/afnetns.h>
 
 struct user_namespace;
 struct proc_dir_entry;
@@ -61,6 +62,9 @@ struct net {
 
 	struct user_namespace   *user_ns;	/* Owning user namespace */
 	struct ucounts		*ucounts;
+#if IS_ENABLED(CONFIG_AFNETNS)
+	struct afnetns		*afnet_ns;
+#endif
 	spinlock_t		nsid_lock;
 	struct idr		netns_ids;
 

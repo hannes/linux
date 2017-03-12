@@ -1,0 +1,64 @@
+Address-family net namespace
+===========================
+
+Support for afnetns is enabled in the kernel via CONFIG_AFNETNS.
+
+afnetns allows to put address family addresses into separate
+namespaces.
+
+afnetns behaves like all other namespaces: clone, unshare, setns
+syscalls can work with afnetns with one limitation: one cannot cross
+the realm of a network namespace while changing the afnetns
+compartment. To get into a new afnetns in a different net namespace,
+one must first change to the net namespace and afterwards switch to
+the desired afnetns.
+
+The primitive objects in the kernel an afnetns relates to are:
+    - process
+    - socket
+    - ipv4 address
+    - ipv6 address.
+
+An afnetns basically forms a namespace around socket binds. While not
+strictly necessary, it also affects source routing, so firewall rules
+are easier to maintain. It does in no way deal with the reception and
+handling of multicast or broadcast sockets. As the afnetns namespaces
+are connecting to the same L2 network, it does not make sense to try
+to build up separation rules here, as they can be broken anyway.
+
+afnetns doesn't allow sharing of the 127.0.0.1/32 loopback
+address. Instead each afnetns must be provided with a loopback address
+from the 127.0.0.0/8 range if needed.
+
+The easiest way to use afnetns is to use the iproute2 interface, which
+very much follows the style of ip-netns.
+
+$ ip afnetns help
+Usage: ip afnetns list
+       ip afnetns add NAME
+       ip afnetns del NAME
+       ip afnetns exec NAME cmd ...
+
+IP addresses carry a afnetns identifier, too. It is visible with the
+-d (details) option:
+
+$ ip -d a l dev lo
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 promiscuity 0 numtxqueues 1 numrxqueues 1 
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever afnet afnet:[4026531958],self
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever afnet afnet:[4026531958],self
+
+This shows the afnetns inode number, as well as that we are currently
+in the same namespace as the two specified ip addresses. In case we
+added a name for the namespace with ip-afnetns, it will be visible
+here, too.
+
+$ ip a a 10.0.0.1/24 dev lo afnetns test
+
+This command adds a new ip address to the loopback device and makes it
+available in the "test" afnetns. Commands in this namespace can use
+this IP address and use it for outgoing communication.
+
+The same commands work for IPv6, I only used IPv4 as an example.

@@ -31,6 +31,9 @@ static const struct proc_ns_operations *ns_entries[] = {
 #ifdef CONFIG_CGROUPS
 	&cgroupns_operations,
 #endif
+#if IS_ENABLED(CONFIG_AFNETNS)
+	&afnetns_operations,
+#endif
 };
 
 static const char *proc_ns_get_link(struct dentry *dentry,

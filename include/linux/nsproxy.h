@@ -35,6 +35,9 @@ struct nsproxy {
 	struct pid_namespace *pid_ns_for_children;
 	struct net 	     *net_ns;
 	struct cgroup_namespace *cgroup_ns;
+#if IS_ENABLED(CONFIG_AFNETNS)
+	struct afnetns *afnet_ns;
+#endif
 };
 extern struct nsproxy init_nsproxy;
 

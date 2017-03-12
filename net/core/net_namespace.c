@@ -36,6 +36,9 @@ EXPORT_SYMBOL_GPL(net_namespace_list);
 
 struct net init_net = {
 	.dev_base_head = LIST_HEAD_INIT(init_net.dev_base_head),
+#if IS_ENABLED(CONFIG_AFNETNS)
+	.afnet_ns      = &init_afnetns,
+#endif
 };
 EXPORT_SYMBOL(init_net);
 
@@ -282,6 +285,16 @@ static __net_init int setup_net(struct net *net, struct user_namespace *user_ns)
 	int error = 0;
 	LIST_HEAD(net_exit_list);
 
+#if IS_ENABLED(CONFIG_AFNETNS)
+	if (likely(!net_eq(&init_net, net))) {
+		net->afnet_ns = afnetns_new(net);
+		if (IS_ERR(net->afnet_ns)) {
+			error = PTR_ERR(net->afnet_ns);
+			goto out;
+		}
+	}
+#endif
+
 	atomic_set(&net->count, 1);
 	atomic_set(&net->passive, 1);
 	net->dev_base_seq = 1;
@@ -353,6 +366,9 @@ out_free:
 
 static void net_free(struct net *net)
 {
+#if IS_ENABLED(CONFIG_AFNETNS)
+	afnetns_put(net->afnet_ns);
+#endif
 	kfree(rcu_access_pointer(net->gen));
 	kmem_cache_free(net_cachep, net);
 }
@@ -795,6 +811,11 @@ static int __init net_ns_init(void)
 	rtnl_register(PF_UNSPEC, RTM_GETNSID, rtnl_net_getid, rtnl_net_dumpid,
 		      NULL);
 
+#if IS_ENABLED(CONFIG_AFNETNS)
+	if (afnet_ns_init())
+		panic("Could not setup the initial address family namespace");
+#endif
+
 	return 0;
 }
 
@@ -1035,6 +1056,10 @@ static int netns_install(struct nsproxy *nsproxy, struct ns_common *ns)
 
 	put_net(nsproxy->net_ns);
 	nsproxy->net_ns = get_net(net);
+#if IS_ENABLED(CONFIG_AFNETNS)
+	afnetns_put(nsproxy->afnet_ns);
+	nsproxy->afnet_ns = afnetns_get(net->afnet_ns);
+#endif
 	return 0;
 }
 

@@ -26,6 +26,7 @@
 #include <linux/file.h>
 #include <linux/syscalls.h>
 #include <linux/cgroup.h>
+#include <net/afnetns.h>
 
 static struct kmem_cache *nsproxy_cachep;
 
@@ -42,6 +43,9 @@ struct nsproxy init_nsproxy = {
 #endif
 #ifdef CONFIG_CGROUPS
 	.cgroup_ns		= &init_cgroup_ns,
+#endif
+#if IS_ENABLED(CONFIG_AFNETNS)
+	.afnet_ns		= &init_afnetns,
 #endif
 };
 
@@ -109,8 +113,20 @@ static struct nsproxy *create_new_namespaces(unsigned long flags,
 		goto out_net;
 	}
 
+#if IS_ENABLED(CONFIG_AFNETNS)
+	new_nsp->afnet_ns = copy_afnet_ns(flags, tsk->nsproxy);
+	if (IS_ERR(new_nsp->afnet_ns)) {
+		err = PTR_ERR(new_nsp->afnet_ns);
+		goto out_afnet;
+	}
+#endif
+
 	return new_nsp;
 
+#if IS_ENABLED(CONFIG_AFNETNS)
+out_afnet:
+	put_net(new_nsp->net_ns);
+#endif
 out_net:
 	put_cgroup_ns(new_nsp->cgroup_ns);
 out_cgroup:
@@ -141,7 +157,7 @@ int copy_namespaces(unsigned long flags, struct task_struct *tsk)
 	struct nsproxy *new_ns;
 
 	if (likely(!(flags & (CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC |
-			      CLONE_NEWPID | CLONE_NEWNET |
+			      CLONE_NEWPID | CLONE_NEWNET | CLONE_NEWAFNET |
 			      CLONE_NEWCGROUP)))) {
 		get_nsproxy(old_ns);
 		return 0;
@@ -181,6 +197,9 @@ void free_nsproxy(struct nsproxy *ns)
 		put_pid_ns(ns->pid_ns_for_children);
 	put_cgroup_ns(ns->cgroup_ns);
 	put_net(ns->net_ns);
+#if IS_ENABLED(CONFIG_AFNETNS)
+	afnetns_put(ns->afnet_ns);
+#endif
 	kmem_cache_free(nsproxy_cachep, ns);
 }
 
@@ -195,7 +214,8 @@ int unshare_nsproxy_namespaces(unsigned long unshare_flags,
 	int err = 0;
 
 	if (!(unshare_flags & (CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC |
-			       CLONE_NEWNET | CLONE_NEWPID | CLONE_NEWCGROUP)))
+			       CLONE_NEWNET | CLONE_NEWAFNET |CLONE_NEWPID |
+			       CLONE_NEWCGROUP)))
 		return 0;
 
 	user_ns = new_cred ? new_cred->user_ns : current_user_ns();
