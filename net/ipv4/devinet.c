@@ -838,7 +838,7 @@ static struct in_ifaddr *rtm_to_ifaddr(struct net *net, struct nlmsghdr *nlh,
 			goto errout_free;
 		}
 	} else {
-		ifa->afnetns = afnetns_get(net->afnet_ns);
+		ifa->afnetns = afnetns_get(current->nsproxy->afnet_ns);
 	}
 #else
 	if (tb[IFA_AFNETNS_FD]) {
