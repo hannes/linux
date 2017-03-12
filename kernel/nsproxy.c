@@ -114,7 +114,7 @@ static struct nsproxy *create_new_namespaces(unsigned long flags,
 	}
 
 #if IS_ENABLED(CONFIG_AFNETNS)
-	new_nsp->afnet_ns = copy_afnet_ns(flags, tsk->nsproxy);
+	new_nsp->afnet_ns = copy_afnet_ns(flags, user_ns, tsk->nsproxy);
 	if (IS_ERR(new_nsp->afnet_ns)) {
 		err = PTR_ERR(new_nsp->afnet_ns);
 		goto out_afnet;

@@ -5,6 +5,7 @@
 #include <linux/file.h>
 #include <linux/nsproxy.h>
 #include <linux/proc_ns.h>
+#include <linux/user_namespace.h>
 
 const struct proc_ns_operations afnetns_operations;
 
@@ -17,7 +18,8 @@ static struct afnetns *ns_to_afnet(struct ns_common *ns)
 	return container_of(ns, struct afnetns, ns);
 }
 
-static int afnet_setup(struct afnetns *afnetns, struct net *net)
+static int afnet_setup(struct afnetns *afnetns, struct net *net,
+		       struct user_namespace *user_ns)
 {
 	int err;
 
@@ -28,11 +30,12 @@ static int afnet_setup(struct afnetns *afnetns, struct net *net)
 
 	refcount_set(&afnetns->ref, 1);
 	afnetns->net = get_net(net);
+	afnetns->user_ns = get_user_ns(user_ns);
 
 	return err;
 }
 
-struct afnetns *afnetns_new(struct net *net)
+struct afnetns *afnetns_new(struct net *net, struct user_namespace *user_ns)
 {
 	int err;
 	struct afnetns *afnetns;
@@ -41,7 +44,7 @@ struct afnetns *afnetns_new(struct net *net)
 	if (!afnetns)
 		return ERR_PTR(-ENOMEM);
 
-	err = afnet_setup(afnetns, net);
+	err = afnet_setup(afnetns, net, user_ns);
 	if (err) {
 		kfree(afnetns);
 		return ERR_PTR(err);
@@ -54,6 +57,7 @@ void afnetns_free(struct afnetns *afnetns)
 {
 	ns_free_inum(&afnetns->ns);
 	put_net(afnetns->net);
+	put_user_ns(afnetns->user_ns);
 	kfree(afnetns);
 }
 EXPORT_SYMBOL(afnetns_free);
@@ -85,7 +89,9 @@ unsigned int afnetns_to_inode(struct afnetns *afnetns)
 }
 EXPORT_SYMBOL(afnetns_to_inode);
 
-struct afnetns *copy_afnet_ns(unsigned long flags, struct nsproxy *old)
+struct afnetns *copy_afnet_ns(unsigned long flags,
+			      struct user_namespace *user_ns,
+			      struct nsproxy *old)
 {
 	if (flags & CLONE_NEWNET)
 		return afnetns_get(old->net_ns->afnet_ns);
@@ -93,7 +99,7 @@ struct afnetns *copy_afnet_ns(unsigned long flags, struct nsproxy *old)
 	if (!(flags & CLONE_NEWAFNET))
 		return afnetns_get(old->afnet_ns);
 
-	return afnetns_new(old->net_ns);
+	return afnetns_new(old->net_ns, user_ns);
 }
 
 static struct ns_common *afnet_get(struct task_struct *task)
@@ -144,7 +150,7 @@ int __init afnet_ns_init(void)
 {
 	int err;
 
-	err = afnet_setup(&init_afnetns, &init_net);
+	err = afnet_setup(&init_afnetns, &init_net, &init_user_ns);
 	if (err)
 		return err;
 

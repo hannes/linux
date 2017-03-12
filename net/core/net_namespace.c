@@ -287,7 +287,7 @@ static __net_init int setup_net(struct net *net, struct user_namespace *user_ns)
 
 #if IS_ENABLED(CONFIG_AFNETNS)
 	if (likely(!net_eq(&init_net, net))) {
-		net->afnet_ns = afnetns_new(net);
+		net->afnet_ns = afnetns_new(net, user_ns);
 		if (IS_ERR(net->afnet_ns)) {
 			error = PTR_ERR(net->afnet_ns);
 			goto out;
