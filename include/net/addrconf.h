@@ -78,6 +78,7 @@ bool ipv6_chk_custom_prefix(const struct in6_addr *addr,
 
 int ipv6_chk_prefix(const struct in6_addr *addr, struct net_device *dev);
 
+extern struct hlist_head inet6_addr_lst[IN6_ADDR_HSIZE];
 struct inet6_ifaddr *ipv6_get_ifaddr(struct net *net,
 				     const struct in6_addr *addr,
 				     struct net_device *dev, int strict);
@@ -414,6 +415,11 @@ static inline bool ipv6_addr_is_solict_mult(const struct in6_addr *addr)
 		(addr->s6_addr32[2] ^ htonl(0x00000001)) |
 		(addr->s6_addr[12] ^ 0xff)) == 0;
 #endif
+}
+
+static inline u32 inet6_addr_hash(const struct in6_addr *addr)
+{
+	return hash_32(ipv6_addr_hash(addr), IN6_ADDR_HSIZE_SHIFT);
 }
 
 #ifdef CONFIG_PROC_FS

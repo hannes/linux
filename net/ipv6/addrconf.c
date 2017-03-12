@@ -160,7 +160,6 @@ static int ipv6_generate_stable_address(struct in6_addr *addr,
 /*
  *	Configured unicast address hash table
  */
-static struct hlist_head inet6_addr_lst[IN6_ADDR_HSIZE];
 static DEFINE_SPINLOCK(addrconf_hash_lock);
 
 static void addrconf_verify(void);
@@ -934,11 +933,6 @@ ipv6_link_dev_addr(struct inet6_dev *idev, struct inet6_ifaddr *ifp)
 	}
 
 	list_add_tail(&ifp->if_list, p);
-}
-
-static u32 inet6_addr_hash(const struct in6_addr *addr)
-{
-	return hash_32(ipv6_addr_hash(addr), IN6_ADDR_HSIZE_SHIFT);
 }
 
 /* On success it returns ifp with increased reference count */
@@ -1887,30 +1881,6 @@ int ipv6_chk_prefix(const struct in6_addr *addr, struct net_device *dev)
 	return onlink;
 }
 EXPORT_SYMBOL(ipv6_chk_prefix);
-
-struct inet6_ifaddr *ipv6_get_ifaddr(struct net *net, const struct in6_addr *addr,
-				     struct net_device *dev, int strict)
-{
-	struct inet6_ifaddr *ifp, *result = NULL;
-	unsigned int hash = inet6_addr_hash(addr);
-
-	rcu_read_lock_bh();
-	hlist_for_each_entry_rcu_bh(ifp, &inet6_addr_lst[hash], addr_lst) {
-		if (!net_eq(dev_net(ifp->idev->dev), net))
-			continue;
-		if (ipv6_addr_equal(&ifp->addr, addr)) {
-			if (!dev || ifp->idev->dev == dev ||
-			    !(ifp->scope&(IFA_LINK|IFA_HOST) || strict)) {
-				result = ifp;
-				in6_ifa_hold(ifp);
-				break;
-			}
-		}
-	}
-	rcu_read_unlock_bh();
-
-	return result;
-}
 
 /* Gets referenced address, destroys ifaddr */
 
@@ -6518,7 +6488,7 @@ static struct rtnl_af_ops inet6_ops __read_mostly = {
 int __init addrconf_init(void)
 {
 	struct inet6_dev *idev;
-	int i, err;
+	int err;
 
 	err = ipv6_addr_label_init();
 	if (err < 0) {
@@ -6562,9 +6532,6 @@ int __init addrconf_init(void)
 		err = PTR_ERR(idev);
 		goto errlo;
 	}
-
-	for (i = 0; i < IN6_ADDR_HSIZE; i++)
-		INIT_HLIST_HEAD(&inet6_addr_lst[i]);
 
 	register_netdevice_notifier(&ipv6_dev_notf);
 

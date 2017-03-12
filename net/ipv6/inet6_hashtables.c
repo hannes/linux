@@ -25,6 +25,9 @@
 #include <net/ip.h>
 #include <net/sock_reuseport.h>
 
+struct hlist_head inet6_addr_lst[IN6_ADDR_HSIZE];
+EXPORT_SYMBOL(inet6_addr_lst);
+
 u32 inet6_ehashfn(const struct net *net,
 		  const struct in6_addr *laddr, const u16 lport,
 		  const struct in6_addr *faddr, const __be16 fport)
@@ -43,6 +46,32 @@ u32 inet6_ehashfn(const struct net *net,
 	return __inet6_ehashfn(lhash, lport, fhash, fport,
 			       inet6_ehash_secret + net_hash_mix(net));
 }
+
+struct inet6_ifaddr *ipv6_get_ifaddr(struct net *net,
+				     const struct in6_addr *addr,
+				     struct net_device *dev, int strict)
+{
+	struct inet6_ifaddr *ifp, *result = NULL;
+	unsigned int hash = inet6_addr_hash(addr);
+
+	rcu_read_lock_bh();
+	hlist_for_each_entry_rcu_bh(ifp, &inet6_addr_lst[hash], addr_lst) {
+		if (!net_eq(dev_net(ifp->idev->dev), net))
+			continue;
+		if (ipv6_addr_equal(&ifp->addr, addr)) {
+			if (!dev || ifp->idev->dev == dev ||
+			    !(ifp->scope & (IFA_LINK | IFA_HOST) || strict)) {
+				result = ifp;
+				in6_ifa_hold(ifp);
+				break;
+			}
+		}
+	}
+	rcu_read_unlock_bh();
+
+	return result;
+}
+EXPORT_SYMBOL(ipv6_get_ifaddr);
 
 /*
  * Sockets in TCP_CLOSE state are _always_ taken out of the hash, so
@@ -275,3 +304,13 @@ int inet6_hash(struct sock *sk)
 	return err;
 }
 EXPORT_SYMBOL_GPL(inet6_hash);
+
+int __init inet6_hashtables_init(void)
+{
+	int i;
+
+	for (i = 0; i < IN6_ADDR_HSIZE; i++)
+		INIT_HLIST_HEAD(&inet6_addr_lst[i]);
+	return 0;
+}
+early_initcall(inet6_hashtables_init);
