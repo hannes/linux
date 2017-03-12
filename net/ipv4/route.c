@@ -2291,17 +2291,20 @@ struct rtable *__ip_route_output_key_hash(struct net *net,
 		    ipv4_is_lbcast(fl4->daddr) ||
 		    fl4->flowi4_proto == IPPROTO_IGMP) {
 			if (!fl4->saddr)
-				fl4->saddr = inet_select_addr(dev_out, 0,
-							      RT_SCOPE_LINK);
+				fl4->saddr = __inet_select_addr(dev_out, 0,
+								RT_SCOPE_LINK,
+								afnetns);
 			goto make_route;
 		}
 		if (!fl4->saddr) {
 			if (ipv4_is_multicast(fl4->daddr))
-				fl4->saddr = inet_select_addr(dev_out, 0,
-							      fl4->flowi4_scope);
+				fl4->saddr = __inet_select_addr(dev_out, 0,
+								fl4->flowi4_scope,
+								afnetns);
 			else if (!fl4->daddr)
-				fl4->saddr = inet_select_addr(dev_out, 0,
-							      RT_SCOPE_HOST);
+				fl4->saddr = __inet_select_addr(dev_out, 0,
+								RT_SCOPE_HOST,
+								afnetns);
 		}
 	}
 
@@ -2342,8 +2345,9 @@ struct rtable *__ip_route_output_key_hash(struct net *net,
 			 */
 
 			if (fl4->saddr == 0)
-				fl4->saddr = inet_select_addr(dev_out, 0,
-							      RT_SCOPE_LINK);
+				fl4->saddr = __inet_select_addr(dev_out, 0,
+								RT_SCOPE_LINK,
+								afnetns);
 			res.type = RTN_UNICAST;
 			goto make_route;
 		}
