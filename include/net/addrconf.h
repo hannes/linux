@@ -104,6 +104,23 @@ int addrconf_prefix_rcv_add_addr(struct net *net, struct net_device *dev,
 				 u32 addr_flags, bool sllao, bool tokenized,
 				 __u32 valid_lft, u32 prefered_lft);
 
+static inline
+struct afnetns *ipv6_get_ifaddr_afnetns_rcu(struct net *net,
+					    const struct in6_addr *addr,
+					    struct net_device *dev)
+{
+#if IS_ENABLED(CONFIG_AFNETNS)
+	struct inet6_ifaddr *ifp;
+
+	ifp = ipv6_get_ifaddr(net, addr, dev, 1);
+	if (ifp)
+		return ifp->afnetns;
+	return net->afnet_ns;
+#else
+	return NULL;
+#endif
+}
+
 static inline int addrconf_ifid_eui48(u8 *eui, struct net_device *dev)
 {
 	if (dev->addr_len != ETH_ALEN)
