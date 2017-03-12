@@ -126,6 +126,7 @@ static void udp_v6_rehash(struct sock *sk)
 }
 
 static int compute_score(struct sock *sk, struct net *net,
+			 struct afnetns *afnetns,
 			 const struct in6_addr *saddr, __be16 sport,
 			 const struct in6_addr *daddr, unsigned short hnum,
 			 int dif, bool exact_dif)
@@ -136,6 +137,9 @@ static int compute_score(struct sock *sk, struct net *net,
 	if (!net_eq(sock_net(sk), net) ||
 	    udp_sk(sk)->udp_port_hash != hnum ||
 	    sk->sk_family != PF_INET6)
+		return -1;
+
+	if (sock_afnetns(sk) != afnetns)
 		return -1;
 
 	score = 0;
@@ -173,6 +177,7 @@ static int compute_score(struct sock *sk, struct net *net,
 
 /* called with rcu_read_lock() */
 static struct sock *udp6_lib_lookup2(struct net *net,
+		struct afnetns *afnetns,
 		const struct in6_addr *saddr, __be16 sport,
 		const struct in6_addr *daddr, unsigned int hnum, int dif,
 		bool exact_dif, struct udp_hslot *hslot2,
@@ -185,7 +190,7 @@ static struct sock *udp6_lib_lookup2(struct net *net,
 	result = NULL;
 	badness = -1;
 	udp_portaddr_for_each_entry_rcu(sk, &hslot2->head) {
-		score = compute_score(sk, net, saddr, sport,
+		score = compute_score(sk, net, afnetns, saddr, sport,
 				      daddr, hnum, dif, exact_dif);
 		if (score > badness) {
 			reuseport = sk->sk_reuseport;
@@ -224,7 +229,10 @@ struct sock *__udp6_lib_lookup(struct net *net,
 	struct udp_hslot *hslot2, *hslot = &udptable->hash[slot];
 	bool exact_dif = udp6_lib_exact_dif_match(net, skb);
 	int score, badness, matches = 0, reuseport = 0;
+	struct afnetns *afnetns;
 	u32 hash = 0;
+
+	afnetns = ipv6_get_ifaddr_afnetns_rcu(net, daddr, skb->dev);
 
 	if (hslot->count > 10) {
 		hash2 = udp6_portaddr_hash(net, daddr, hnum);
@@ -233,7 +241,7 @@ struct sock *__udp6_lib_lookup(struct net *net,
 		if (hslot->count < hslot2->count)
 			goto begin;
 
-		result = udp6_lib_lookup2(net, saddr, sport,
+		result = udp6_lib_lookup2(net, afnetns, saddr, sport,
 					  daddr, hnum, dif, exact_dif,
 					  hslot2, skb);
 		if (!result) {
@@ -248,7 +256,7 @@ struct sock *__udp6_lib_lookup(struct net *net,
 			if (hslot->count < hslot2->count)
 				goto begin;
 
-			result = udp6_lib_lookup2(net, saddr, sport,
+			result = udp6_lib_lookup2(net, afnetns, saddr, sport,
 						  daddr, hnum, dif,
 						  exact_dif, hslot2,
 						  skb);
@@ -259,8 +267,8 @@ begin:
 	result = NULL;
 	badness = -1;
 	sk_for_each_rcu(sk, &hslot->head) {
-		score = compute_score(sk, net, saddr, sport, daddr, hnum, dif,
-				      exact_dif);
+		score = compute_score(sk, net, afnetns, saddr, sport, daddr,
+				      hnum, dif, exact_dif);
 		if (score > badness) {
 			reuseport = sk->sk_reuseport;
 			if (reuseport) {
