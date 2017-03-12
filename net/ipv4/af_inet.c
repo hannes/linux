@@ -428,12 +428,14 @@ int inet_release(struct socket *sock)
 }
 EXPORT_SYMBOL(inet_release);
 
-int inet_allow_bind(struct sock *sk, __be32 addr)
+int inet_allow_bind(struct sock *sk, __be32 addr, unsigned short snum)
 {
 	struct inet_sock *inet = inet_sk(sk);
 	struct net *net = sock_net(sk);
+	struct afnetns *afnetns = NULL;
 	u32 tb_id = RT_TABLE_LOCAL;
 	int chk_addr_ret;
+	int err = 0;
 
 	tb_id = l3mdev_fib_table_by_index(net, sk->sk_bound_dev_if) ? : tb_id;
 	chk_addr_ret = inet_addr_type_table(net, addr, tb_id);
@@ -453,18 +455,29 @@ int inet_allow_bind(struct sock *sk, __be32 addr)
 	    chk_addr_ret != RTN_BROADCAST)
 		return -EADDRNOTAVAIL;
 
+	rcu_read_lock();
 	if (chk_addr_ret == RTN_LOCAL &&
 	    net_afnetns(net) != sock_afnetns(sk)) {
-		struct afnetns *afnetns;
-
-		rcu_read_lock();
 		afnetns = ifa_find_afnetns_rcu(net, addr);
 		if (afnetns != sock_afnetns(sk))
-			chk_addr_ret = -EADDRNOTAVAIL;
-		rcu_read_unlock();
+			err = -EADDRNOTAVAIL;
 	}
 
-	return chk_addr_ret;
+	if (!err && snum && snum < inet_prot_sock(net)) {
+		struct user_namespace *user_ns;
+
+#if IS_ENABLED(CONFIG_AFNETNS)
+		user_ns = afnetns ? afnetns->user_ns : net->user_ns;
+#else
+		user_ns = net->user_ns;
+#endif
+		if (!ns_capable(user_ns, CAP_NET_BIND_SERVICE))
+			err = -EACCES;
+	}
+
+	rcu_read_unlock();
+
+	return err;
 }
 EXPORT_SYMBOL(inet_allow_bind);
 
@@ -473,7 +486,6 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	struct sockaddr_in *addr = (struct sockaddr_in *)uaddr;
 	struct sock *sk = sock->sk;
 	struct inet_sock *inet = inet_sk(sk);
-	struct net *net = sock_net(sk);
 	unsigned short snum;
 	int chk_addr_ret;
 	int err;
@@ -497,17 +509,12 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 			goto out;
 	}
 
-	chk_addr_ret = inet_allow_bind(sk, addr->sin_addr.s_addr);
+	snum = ntohs(addr->sin_port);
+	chk_addr_ret = inet_allow_bind(sk, addr->sin_addr.s_addr, snum);
 	if (chk_addr_ret < 0) {
 		err = chk_addr_ret;
 		goto out;
 	}
-
-	snum = ntohs(addr->sin_port);
-	err = -EACCES;
-	if (snum && snum < inet_prot_sock(net) &&
-	    !ns_capable(net->user_ns, CAP_NET_BIND_SERVICE))
-		goto out;
 
 	/*      We keep a pair of addresses. rcv_saddr is the one
 	 *      used by hash lookups, and saddr is used for transmit.

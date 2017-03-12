@@ -324,7 +324,7 @@ int inet6_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 			goto out;
 		}
 
-		err = inet_allow_bind(sk, addr->sin6_addr.s6_addr32[3]);
+		err = inet_allow_bind(sk, addr->sin6_addr.s6_addr32[3], snum);
 		if (err < 0)
 			goto out;
 		else

@@ -30,7 +30,7 @@ int inet_shutdown(struct socket *sock, int how);
 int inet_listen(struct socket *sock, int backlog);
 void inet_sock_destruct(struct sock *sk);
 int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len);
-int inet_allow_bind(struct sock *sk, __be32 addr);
+int inet_allow_bind(struct sock *sk, __be32 addr, unsigned short snum);
 int inet_getname(struct socket *sock, struct sockaddr *uaddr, int *uaddr_len,
 		 int peer);
 int inet_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg);
