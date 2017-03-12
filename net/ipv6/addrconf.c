@@ -4542,7 +4542,7 @@ inet6_rtm_newaddr(struct sk_buff *skb, struct nlmsghdr *nlh)
 		if (IS_ERR(afnetns))
 			return PTR_ERR(afnetns);
 	} else {
-		afnetns = afnetns_get(net_afnetns(net));
+		afnetns = afnetns_get(current->nsproxy->afnet_ns);
 	}
 #else
 	if (tb[IFA_AFNETNS_FD])
