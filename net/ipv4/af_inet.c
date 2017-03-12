@@ -453,6 +453,17 @@ int inet_allow_bind(struct sock *sk, __be32 addr)
 	    chk_addr_ret != RTN_BROADCAST)
 		return -EADDRNOTAVAIL;
 
+	if (chk_addr_ret == RTN_LOCAL &&
+	    net_afnetns(net) != sock_afnetns(sk)) {
+		struct afnetns *afnetns;
+
+		rcu_read_lock();
+		afnetns = ifa_find_afnetns_rcu(net, addr);
+		if (afnetns != sock_afnetns(sk))
+			chk_addr_ret = -EADDRNOTAVAIL;
+		rcu_read_unlock();
+	}
+
 	return chk_addr_ret;
 }
 EXPORT_SYMBOL(inet_allow_bind);
