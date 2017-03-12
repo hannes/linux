@@ -43,7 +43,6 @@ struct net_generic;
 struct sock;
 struct netns_ipvs;
 
-
 #define NETDEV_HASHBITS    8
 #define NETDEV_HASHENTRIES (1 << NETDEV_HASHBITS)
 
@@ -64,6 +63,9 @@ struct net {
 
 	struct user_namespace   *user_ns;	/* Owning user namespace */
 	struct ucounts		*ucounts;
+#ifdef CONFIG_AFNETNS
+	struct afnetns		*afnet_ns;
+#endif
 	spinlock_t		nsid_lock;
 	struct idr		netns_ids;
 

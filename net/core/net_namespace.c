@@ -22,6 +22,7 @@
 #include <net/netlink.h>
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
+#include <net/afnetns.h>
 
 /*
  *	Our network namespace constructor/destructor lists
@@ -37,6 +38,9 @@ EXPORT_SYMBOL_GPL(net_namespace_list);
 struct net init_net = {
 	.count		= REFCOUNT_INIT(1),
 	.dev_base_head	= LIST_HEAD_INIT(init_net.dev_base_head),
+#ifdef CONFIG_AFNETNS
+	.afnet_ns	= &init_afnet,
+#endif
 };
 EXPORT_SYMBOL(init_net);
 
@@ -298,6 +302,16 @@ static __net_init int setup_net(struct net *net, struct user_namespace *user_ns)
 	idr_init(&net->netns_ids);
 	spin_lock_init(&net->nsid_lock);
 
+#if IS_ENABLED(CONFIG_AFNETNS)
+	if (likely(!net_eq(&init_net, net))) {
+		net->afnet_ns = afnetns_new(net, user_ns, true);
+		if (IS_ERR(net->afnet_ns)) {
+			error = PTR_ERR(net->afnet_ns);
+			goto out;
+		}
+	}
+#endif
+
 	list_for_each_entry(ops, &pernet_list, list) {
 		error = ops_init(ops, net);
 		if (error < 0)
@@ -381,6 +395,7 @@ out_free:
 
 static void net_free(struct net *net)
 {
+	afnetns_destruct_owned(net->afnet_ns);
 	kfree(rcu_access_pointer(net->gen));
 	kmem_cache_free(net_cachep, net);
 }
@@ -853,6 +868,11 @@ static int __init net_ns_init(void)
 	if (setup_net(&init_net, &init_user_ns))
 		panic("Could not setup the initial network namespace");
 
+#if IS_ENABLED(CONFIG_AFNETNS)
+	if (afnet_ns_init())
+		panic("Could not setup the initial address family namespace");
+#endif
+
 	init_net_initialized = true;
 
 	rtnl_lock();
@@ -1108,6 +1128,10 @@ static int netns_install(struct nsproxy *nsproxy, struct ns_common *ns)
 
 	put_net(nsproxy->net_ns);
 	nsproxy->net_ns = get_net(net);
+#if IS_ENABLED(CONFIG_AFNETNS)
+	afnetns_put(nsproxy->afnet_ns);
+	nsproxy->afnet_ns = afnetns_get(net->afnet_ns);
+#endif
 	return 0;
 }
 

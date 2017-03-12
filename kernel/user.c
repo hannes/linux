@@ -54,7 +54,11 @@ struct user_namespace init_user_ns = {
 			},
 		},
 	},
+#ifdef CONFIG_AFNETNS
+	.count = ATOMIC_INIT(4),
+#else
 	.count = ATOMIC_INIT(3),
+#endif
 	.owner = GLOBAL_ROOT_UID,
 	.group = GLOBAL_ROOT_GID,
 	.ns.inum = PROC_USER_INIT_INO,

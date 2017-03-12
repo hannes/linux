@@ -79,6 +79,9 @@ static struct ctl_table user_table[] = {
 	UCOUNT_ENTRY("max_inotify_instances"),
 	UCOUNT_ENTRY("max_inotify_watches"),
 #endif
+#ifdef CONFIG_AFNETNS
+	UCOUNT_ENTRY("max_afnet_namespaces"),
+#endif
 	{ }
 };
 #endif /* CONFIG_SYSCTL */
