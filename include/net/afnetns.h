@@ -19,6 +19,8 @@ int afnet_ns_init(void);
 
 struct afnetns *afnetns_new(struct net *net);
 struct afnetns *copy_afnet_ns(unsigned long flags, struct nsproxy *old);
+struct afnetns *afnetns_get_by_fd(int fd);
+unsigned int afnetns_to_inode(struct afnetns *afnetns);
 void afnetns_free(struct afnetns *afnetns);
 
 static inline struct afnetns *afnetns_get(struct afnetns *afnetns)

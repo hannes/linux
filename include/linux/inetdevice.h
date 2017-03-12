@@ -141,6 +141,9 @@ struct in_ifaddr {
 	unsigned char		ifa_scope;
 	unsigned char		ifa_prefixlen;
 	__u32			ifa_flags;
+#if IS_ENABLED(CONFIG_AFNETNS)
+	struct afnetns		*afnetns;
+#endif
 	char			ifa_label[IFNAMSIZ];
 
 	/* In seconds, relative to tstamp. Expiry is at tstamp + HZ * lft. */

@@ -2,6 +2,7 @@
 #include <net/net_namespace.h>
 #include <linux/sched.h>
 #include <linux/sched/task.h>
+#include <linux/file.h>
 #include <linux/nsproxy.h>
 #include <linux/proc_ns.h>
 
@@ -54,6 +55,31 @@ void afnetns_free(struct afnetns *afnetns)
 	ns_free_inum(&afnetns->ns);
 	put_net(afnetns->net);
 	kfree(afnetns);
+}
+
+struct afnetns *afnetns_get_by_fd(int fd)
+{
+	struct file *file;
+	struct ns_common *ns;
+	struct afnetns *afnetns;
+
+	file = proc_ns_fget(fd);
+	if (IS_ERR(file))
+		return ERR_CAST(file);
+
+	ns = get_proc_ns(file_inode(file));
+	if (ns->ops == &afnetns_operations)
+		afnetns = afnetns_get(ns_to_afnet(ns));
+	else
+		afnetns = ERR_PTR(-EINVAL);
+
+	fput(file);
+	return afnetns;
+}
+
+unsigned int afnetns_to_inode(struct afnetns *afnetns)
+{
+	return afnetns->ns.inum;
 }
 
 struct afnetns *copy_afnet_ns(unsigned long flags, struct nsproxy *old)
