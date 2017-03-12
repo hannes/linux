@@ -11,6 +11,7 @@ struct ipc_namespace;
 struct pid_namespace;
 struct cgroup_namespace;
 struct fs_struct;
+struct afnetns;
 
 /*
  * A structure to contain pointers to all per-process
@@ -36,6 +37,9 @@ struct nsproxy {
 	struct pid_namespace *pid_ns_for_children;
 	struct net 	     *net_ns;
 	struct cgroup_namespace *cgroup_ns;
+#ifdef CONFIG_AFNETNS
+	struct afnetns *afnet_ns;
+#endif
 };
 extern struct nsproxy init_nsproxy;
 

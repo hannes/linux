@@ -85,6 +85,16 @@ config INET
 	  Short answer: say Y.
 
 if INET
+
+config AFNETNS
+       select NET_NS
+       depends on NAMESPACES
+       bool "Address family net namespace"
+       ---help---
+	 This option enables support for afnetns. It allows to put
+         address family (currently IPv4/IPv6) addresses into separate
+         namespaces.
+
 source "net/ipv4/Kconfig"
 source "net/ipv6/Kconfig"
 source "net/netlabel/Kconfig"
