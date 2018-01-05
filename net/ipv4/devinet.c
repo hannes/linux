@@ -99,6 +99,7 @@ static const struct nla_policy ifa_ipv4_policy[IFA_MAX+1] = {
 	[IFA_LABEL]     	= { .type = NLA_STRING, .len = IFNAMSIZ - 1 },
 	[IFA_CACHEINFO]		= { .len = sizeof(struct ifa_cacheinfo) },
 	[IFA_FLAGS]		= { .type = NLA_U32 },
+	[IFA_AFNETNS_FD]	= { .type = NLA_S32 },
 };
 
 #define IN4_ADDR_HSIZE_SHIFT	8
@@ -210,6 +211,9 @@ static void inet_rcu_free_ifa(struct rcu_head *head)
 	struct in_ifaddr *ifa = container_of(head, struct in_ifaddr, rcu_head);
 	if (ifa->ifa_dev)
 		in_dev_put(ifa->ifa_dev);
+#ifdef CONFIG_AFNETNS
+	afnetns_put_weak(ifa->afnetns);
+#endif
 	kfree(ifa);
 }
 
@@ -847,6 +851,26 @@ static struct in_ifaddr *rtm_to_ifaddr(struct net *net, struct nlmsghdr *nlh,
 		*pprefered_lft = ci->ifa_prefered;
 	}
 
+#ifdef CONFIG_AFNETNS
+	if (tb[IFA_AFNETNS_FD]) {
+		int fd = nla_get_s32(tb[IFA_AFNETNS_FD]);
+
+		ifa->afnetns = afnetns_get_by_fd_weak(fd);
+		if (IS_ERR(ifa->afnetns)) {
+			err = PTR_ERR(ifa->afnetns);
+			ifa->afnetns = afnetns_get_weak(net->afnet_ns);
+			goto errout_free;
+		}
+	} else {
+		ifa->afnetns = afnetns_get_current_weak();
+	}
+#else
+	if (tb[IFA_AFNETNS_FD]) {
+		err = -EOPNOTSUPP;
+		goto errout_free;
+	}
+#endif
+
 	return ifa;
 
 errout_free:
@@ -1121,6 +1145,9 @@ int devinet_ioctl(struct net *net, unsigned int cmd, void __user *arg)
 			ifa->ifa_mask = inet_make_mask(32);
 		}
 		set_ifa_lifetime(ifa, INFINITY_LIFE_TIME, INFINITY_LIFE_TIME);
+#ifdef CONFIG_AFNETNS
+		ifa->afnetns = afnetns_get_current_weak();
+#endif
 		ret = inet_set_ifa(dev, ifa);
 		break;
 
@@ -1498,6 +1525,9 @@ static int inetdev_event(struct notifier_block *this, unsigned long event,
 						 INFINITY_LIFE_TIME);
 				ipv4_devconf_setall(in_dev);
 				neigh_parms_data_state_setall(in_dev->arp_parms);
+#ifdef CONFIG_AFNETNS
+				ifa->afnetns = afnetns_get_weak(dev_net(dev)->afnet_ns);
+#endif
 				inet_insert_ifa(ifa);
 			}
 		}
@@ -1554,7 +1584,8 @@ static size_t inet_nlmsg_size(void)
 	       + nla_total_size(4) /* IFA_BROADCAST */
 	       + nla_total_size(IFNAMSIZ) /* IFA_LABEL */
 	       + nla_total_size(4)  /* IFA_FLAGS */
-	       + nla_total_size(sizeof(struct ifa_cacheinfo)); /* IFA_CACHEINFO */
+	       + nla_total_size(sizeof(struct ifa_cacheinfo)) /* IFA_CACHEINFO */
+	       + nla_total_size(4) /* IFA_AFNETNS_INODE */;
 }
 
 static inline u32 cstamp_delta(unsigned long cstamp)
@@ -1626,6 +1657,21 @@ static int inet_fill_ifaddr(struct sk_buff *skb, struct in_ifaddr *ifa,
 	    put_cacheinfo(skb, ifa->ifa_cstamp, ifa->ifa_tstamp,
 			  preferred, valid))
 		goto nla_put_failure;
+
+#ifdef CONFIG_AFNETNS
+	{
+		struct afnetns *afnetns = afnetns_weak_upgrade(ifa->afnetns);
+
+		if (afnetns) {
+			if (nla_put_u32(skb, IFA_AFNETNS_INODE,
+					afnetns_to_inode(afnetns))) {
+				afnetns_put(afnetns);
+				goto nla_put_failure;
+			}
+			afnetns_put(afnetns);
+		}
+	}
+#endif
 
 	nlmsg_end(skb, nlh);
 	return 0;
