@@ -11,6 +11,7 @@ const struct proc_ns_operations afnetns_operations;
 struct afnetns init_afnet = {
 	.owned = true,
 	.ref = REFCOUNT_INIT(1),
+	.weak = REFCOUNT_INIT(1),
 	.net = &init_net,
 	.user_ns = &init_user_ns,
 };
@@ -33,6 +34,8 @@ static int afnetns_setup(struct afnetns *afnetns, struct net *net,
 	if (afnetns != &init_afnet) {
 		afnetns->owned = owned;
 		refcount_set(&afnetns->ref, 1);
+		/* all strong references hold a weak ref */
+		refcount_set(&afnetns->weak, 1);
 		afnetns->net = owned ? net : get_net(net);
 		afnetns->user_ns = get_user_ns(user_ns);
 	}
@@ -41,6 +44,12 @@ static int afnetns_setup(struct afnetns *afnetns, struct net *net,
 }
 
 static struct kmem_cache *afnet_cache;
+
+void afnetns_free(struct afnetns *afnetns)
+{
+	kmem_cache_free(afnet_cache, afnetns);
+}
+EXPORT_SYMBOL(afnetns_free);
 
 struct afnetns *afnetns_new(struct net *net, struct user_namespace *user_ns,
 			    bool owned)
@@ -65,7 +74,7 @@ struct afnetns *afnetns_new(struct net *net, struct user_namespace *user_ns,
 
 	err = afnetns_setup(afnetns, net, user_ns, owned);
 	if (err) {
-		kmem_cache_free(afnet_cache, afnetns);
+		afnetns_free(afnetns);
 		if (ucounts)
 			dec_ucount(ucounts, UCOUNT_AFNET_NAMESPACES);
 		return ERR_PTR(err);
@@ -123,7 +132,7 @@ static void afnetns_destruct_work_func(__always_unused struct work_struct *work)
 		ns_free_inum(&afnetns->ns);
 		put_net(afnetns->net);
 		put_user_ns(afnetns->user_ns);
-		kmem_cache_free(afnet_cache, afnetns);
+		afnetns_put_weak((struct afnetns_weak *)afnetns);
 		dec_ucount(ucounts, UCOUNT_AFNET_NAMESPACES);
 	}
 }
@@ -157,12 +166,12 @@ void afnetns_destruct_owned(struct afnetns *afnetns)
 
 	ns_free_inum(&afnetns->ns);
 	put_user_ns(afnetns->user_ns);
-	kmem_cache_free(afnet_cache, afnetns);
+	afnetns_put_weak((struct afnetns_weak *)afnetns);
 }
 
-struct afnetns *afnetns_get_by_fd(int fd)
+struct afnetns_weak *afnetns_get_by_fd_weak(int fd)
 {
-	struct afnetns *afnetns;
+	struct afnetns_weak *afnetns;
 	struct ns_common *ns;
 	struct file *file;
 
@@ -172,14 +181,14 @@ struct afnetns *afnetns_get_by_fd(int fd)
 
 	ns = get_proc_ns(file_inode(file));
 	if (ns->ops == &afnetns_operations)
-		afnetns = afnetns_get(ns_to_afnet(ns));
+		afnetns = afnetns_get_weak(ns_to_afnet(ns));
 	else
 		afnetns = ERR_PTR(-EINVAL);
 
 	fput(file);
 	return afnetns;
 }
-EXPORT_SYMBOL(afnetns_get_by_fd);
+EXPORT_SYMBOL(afnetns_get_by_fd_weak);
 
 unsigned int afnetns_to_inode(struct afnetns *afnetns)
 {

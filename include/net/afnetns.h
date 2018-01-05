@@ -16,9 +16,14 @@ struct afnetns {
 	struct net *net;
 	bool owned;
 	refcount_t ref;
+	refcount_t weak;
 	struct ucounts *ucounts;
 	struct ns_common ns;
 	struct list_head destruct_list;
+};
+
+struct afnetns_weak {
+	struct afnetns w;
 };
 
 struct perafnet_operations {
@@ -36,10 +41,17 @@ struct afnetns *copy_afnet_ns(unsigned long flags,
 			      struct nsproxy *old);
 void afnetns_ops_register(struct perafnet_operations *ops);
 void afnetns_ops_unregister(struct perafnet_operations *ops);
-struct afnetns *afnetns_get_by_fd(int fd);
+struct afnetns_weak *afnetns_get_by_fd_weak(int fd);
 unsigned int afnetns_to_inode(struct afnetns *afnetns);
 void afnetns_destruct_owned(struct afnetns *afnetns);
 void afnetns_destruct(struct afnetns *afnetns);
+void afnetns_free(struct afnetns *afnetns);
+
+static inline struct afnetns_weak *afnetns_get_weak(struct afnetns *afnetns)
+{
+	refcount_inc(&afnetns->weak);
+	return (struct afnetns_weak *)afnetns;
+}
 
 static inline struct afnetns *afnetns_get(struct afnetns *afnetns)
 {
@@ -48,6 +60,12 @@ static inline struct afnetns *afnetns_get(struct afnetns *afnetns)
 	else
 		refcount_inc(&afnetns->ref);
 	return afnetns;
+}
+
+static inline void afnetns_put_weak(struct afnetns_weak *afnetns)
+{
+	if (refcount_dec_and_test(&afnetns->w.weak))
+		afnetns_free(&afnetns->w);
 }
 
 static inline void afnetns_put(struct afnetns *afnetns)
@@ -60,9 +78,27 @@ static inline void afnetns_put(struct afnetns *afnetns)
 	}
 }
 
+static inline struct afnetns *afnetns_weak_upgrade(struct afnetns_weak *afnetns)
+{
+	if (afnetns->w.owned) {
+		if (maybe_get_net(afnetns->w.net))
+			return &afnetns->w;
+	} else {
+		if (refcount_inc_not_zero(&afnetns->w.ref))
+			return &afnetns->w;
+	}
+
+	return NULL;
+}
+
 static inline struct afnetns *afnetns_get_current(void)
 {
 	return afnetns_get(current->nsproxy->afnet_ns);
+}
+
+static inline struct afnetns_weak *afnetns_get_current_weak(void)
+{
+	return afnetns_get_weak(current->nsproxy->afnet_ns);
 }
 
 #else /* CONFIG_AFNETNS */

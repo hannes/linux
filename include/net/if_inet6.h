@@ -42,6 +42,9 @@ enum {
 struct inet6_ifaddr {
 	struct in6_addr		addr;
 	__u32			prefix_len;
+#ifdef CONFIG_AFNETNS
+	struct afnetns_weak	*afnetns;
+#endif
 
 	/* In seconds, relative to tstamp. Expiry is at tstamp + HZ * lft. */
 	__u32			valid_lft;
