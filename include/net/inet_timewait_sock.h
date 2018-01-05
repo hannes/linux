@@ -51,6 +51,7 @@ struct inet_timewait_sock {
 #define tw_hash			__tw_common.skc_hash
 #define tw_prot			__tw_common.skc_prot
 #define tw_net			__tw_common.skc_net
+#define tw_afnet		__tw_common.skc_afnet
 #define tw_daddr        	__tw_common.skc_daddr
 #define tw_v6_daddr		__tw_common.skc_v6_daddr
 #define tw_rcv_saddr    	__tw_common.skc_rcv_saddr
@@ -111,17 +112,16 @@ static inline void inet_twsk_reschedule(struct inet_timewait_sock *tw, int timeo
 
 void inet_twsk_deschedule_put(struct inet_timewait_sock *tw);
 
-void inet_twsk_purge(struct inet_hashinfo *hashinfo, int family);
+void inet_twsk_purge(struct inet_hashinfo *hashinfo, int family, bool afnet);
 
 static inline
 struct net *twsk_net(const struct inet_timewait_sock *twsk)
 {
+#ifdef CONFIG_AFNETNS
+	return twsk->tw_afnet->net;
+#else
 	return read_pnet(&twsk->tw_net);
+#endif
 }
 
-static inline
-void twsk_net_set(struct inet_timewait_sock *twsk, struct net *net)
-{
-	write_pnet(&twsk->tw_net, net);
-}
 #endif	/* _INET_TIMEWAIT_SOCK_ */

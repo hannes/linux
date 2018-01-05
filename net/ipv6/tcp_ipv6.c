@@ -1976,6 +1976,17 @@ static struct inet_protosw tcpv6_protosw = {
 				INET_PROTOSW_ICSK,
 };
 
+#ifdef CONFIG_AFNETNS
+static void tcpv6_afnet_exit_batch(void)
+{
+	inet_twsk_purge(&tcp_hashinfo, AF_INET6, true);
+}
+
+static struct perafnet_operations tcpv6_afnet_ops = {
+	.exit_batch = tcpv6_afnet_exit_batch,
+};
+#endif
+
 static int __net_init tcpv6_net_init(struct net *net)
 {
 	return inet_ctl_sock_create(&net->ipv6.tcp_sk, PF_INET6,
@@ -1989,7 +2000,7 @@ static void __net_exit tcpv6_net_exit(struct net *net)
 
 static void __net_exit tcpv6_net_exit_batch(struct list_head *net_exit_list)
 {
-	inet_twsk_purge(&tcp_hashinfo, AF_INET6);
+	inet_twsk_purge(&tcp_hashinfo, AF_INET6, false);
 }
 
 static struct pernet_operations tcpv6_net_ops = {
@@ -2014,6 +2025,10 @@ int __init tcpv6_init(void)
 	ret = register_pernet_subsys(&tcpv6_net_ops);
 	if (ret)
 		goto out_tcpv6_protosw;
+
+#ifdef CONFIG_AFNETNS
+	afnetns_ops_register(&tcpv6_afnet_ops);
+#endif
 out:
 	return ret;
 
@@ -2026,6 +2041,9 @@ out_tcpv6_protocol:
 
 void tcpv6_exit(void)
 {
+#ifdef CONFIG_AFNETNS
+	afnetns_ops_unregister(&tcpv6_afnet_ops);
+#endif
 	unregister_pernet_subsys(&tcpv6_net_ops);
 	inet6_unregister_protosw(&tcpv6_protosw);
 	inet6_del_protocol(&tcpv6_protocol, IPPROTO_TCP);

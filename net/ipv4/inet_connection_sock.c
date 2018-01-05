@@ -537,7 +537,7 @@ struct dst_entry *inet_csk_route_req(const struct sock *sk,
 				     const struct request_sock *req)
 {
 	const struct inet_request_sock *ireq = inet_rsk(req);
-	struct net *net = read_pnet(&ireq->ireq_net);
+	struct net *net = ireqsk_net(ireq);
 	struct ip_options_rcu *opt;
 	struct rtable *rt;
 
@@ -570,7 +570,7 @@ struct dst_entry *inet_csk_route_child_sock(const struct sock *sk,
 					    const struct request_sock *req)
 {
 	const struct inet_request_sock *ireq = inet_rsk(req);
-	struct net *net = read_pnet(&ireq->ireq_net);
+	struct net *net = ireqsk_net(ireq);
 	struct inet_sock *newinet = inet_sk(newsk);
 	struct ip_options_rcu *opt;
 	struct flowi4 *fl4;

@@ -73,6 +73,7 @@
 #include <linux/net_tstamp.h>
 #include <net/smc.h>
 #include <net/l3mdev.h>
+#include <net/afnetns.h>
 
 /*
  * This structure really needs to be cleaned up.
@@ -184,7 +185,13 @@ struct sock_common {
 		struct hlist_node	skc_portaddr_node;
 	};
 	struct proto		*skc_prot;
+
+#ifdef CONFIG_AFNETNS
+	struct afnetns		*skc_afnet;
+#else
 	possible_net_t		skc_net;
+#endif
+
 
 #if IS_ENABLED(CONFIG_IPV6)
 	struct in6_addr		skc_v6_daddr;
@@ -346,6 +353,7 @@ struct sock {
 #define sk_bind_node		__sk_common.skc_bind_node
 #define sk_prot			__sk_common.skc_prot
 #define sk_net			__sk_common.skc_net
+#define sk_afnet		__sk_common.skc_afnet
 #define sk_v6_daddr		__sk_common.skc_v6_daddr
 #define sk_v6_rcv_saddr	__sk_common.skc_v6_rcv_saddr
 #define sk_cookie		__sk_common.skc_cookie
@@ -2302,14 +2310,20 @@ static inline void sk_eat_skb(struct sock *sk, struct sk_buff *skb)
 static inline
 struct net *sock_net(const struct sock *sk)
 {
+#ifdef CONFIG_AFNETNS
+	return sk->sk_afnet->net;
+#else
 	return read_pnet(&sk->sk_net);
+#endif
 }
 
-static inline
-void sock_net_set(struct sock *sk, struct net *net)
+#ifdef CONFIG_AFNETNS
+static inline struct afnetns *sock_afnet(const struct sock *sk)
 {
-	write_pnet(&sk->sk_net, net);
+	return sk->sk_afnet;
+
 }
+#endif
 
 static inline struct sock *skb_steal_sock(struct sk_buff *skb)
 {

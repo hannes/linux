@@ -579,7 +579,7 @@ static void tcp_write_timer(struct timer_list *t)
 
 void tcp_syn_ack_timeout(const struct request_sock *req)
 {
-	struct net *net = read_pnet(&inet_rsk(req)->ireq_net);
+	struct net *net = ireqsk_net(inet_rsk(req));
 
 	__NET_INC_STATS(net, LINUX_MIB_TCPTIMEOUTS);
 }

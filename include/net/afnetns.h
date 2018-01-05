@@ -18,6 +18,12 @@ struct afnetns {
 	refcount_t ref;
 	struct ucounts *ucounts;
 	struct ns_common ns;
+	struct list_head destruct_list;
+};
+
+struct perafnet_operations {
+	struct list_head list;
+	void (*exit_batch)(void);
 };
 
 extern struct afnetns init_afnet;
@@ -28,6 +34,8 @@ struct afnetns *afnetns_new(struct net *net, struct user_namespace *user_ns,
 struct afnetns *copy_afnet_ns(unsigned long flags,
 			      struct user_namespace *user_ns,
 			      struct nsproxy *old);
+void afnetns_ops_register(struct perafnet_operations *ops);
+void afnetns_ops_unregister(struct perafnet_operations *ops);
 struct afnetns *afnetns_get_by_fd(int fd);
 unsigned int afnetns_to_inode(struct afnetns *afnetns);
 void afnetns_destruct_owned(struct afnetns *afnetns);

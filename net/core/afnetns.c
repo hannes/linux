@@ -77,22 +77,83 @@ struct afnetns *afnetns_new(struct net *net, struct user_namespace *user_ns,
 	return afnetns;
 }
 
+static DEFINE_MUTEX(afnet_mutex);
+static LIST_HEAD(afnetns_ops_list);
+
+void afnetns_ops_register(struct perafnet_operations *ops)
+{
+	mutex_lock(&afnet_mutex);
+	list_add_tail(&ops->list, &afnetns_ops_list);
+	mutex_unlock(&afnet_mutex);
+}
+EXPORT_SYMBOL(afnetns_ops_register);
+
+void afnetns_ops_unregister(struct perafnet_operations *ops)
+{
+	mutex_lock(&afnet_mutex);
+	ops->exit_batch();
+	list_del(&ops->list);
+	mutex_unlock(&afnet_mutex);
+}
+EXPORT_SYMBOL(afnetns_ops_unregister);
+
+static DEFINE_SPINLOCK(afnetns_destruct_lock);
+static LIST_HEAD(afnetns_destruct_list);
+
+static void afnetns_destruct_work_func(__always_unused struct work_struct *work)
+{
+	struct list_head tmp_destruct_list;
+	struct perafnet_operations *ops;
+	struct afnetns *afnetns, *tmp;
+
+	spin_lock_irq(&afnetns_destruct_lock);
+	list_replace_init(&afnetns_destruct_list, &tmp_destruct_list);
+	spin_unlock_irq(&afnetns_destruct_lock);
+
+	mutex_lock(&afnet_mutex);
+	list_for_each_entry(ops, &afnetns_ops_list, list) {
+		ops->exit_batch();
+	}
+	mutex_unlock(&afnet_mutex);
+
+	list_for_each_entry_safe(afnetns, tmp, &tmp_destruct_list,
+				 destruct_list) {
+		struct ucounts *ucounts = afnetns->ucounts;
+
+		ns_free_inum(&afnetns->ns);
+		put_net(afnetns->net);
+		put_user_ns(afnetns->user_ns);
+		kmem_cache_free(afnet_cache, afnetns);
+		dec_ucount(ucounts, UCOUNT_AFNET_NAMESPACES);
+	}
+}
+
+static struct workqueue_struct *afnetns_wq;
+static DECLARE_WORK(afnetns_destruct_work, afnetns_destruct_work_func);
+
 void afnetns_destruct(struct afnetns *afnetns)
 {
-	struct ucounts *ucounts = afnetns->ucounts;
+	unsigned long flags;
 
-	ns_free_inum(&afnetns->ns);
-	put_net(afnetns->net);
-	put_user_ns(afnetns->user_ns);
-	kmem_cache_free(afnet_cache, afnetns);
-	dec_ucount(ucounts, UCOUNT_AFNET_NAMESPACES);
+	spin_lock_irqsave(&afnetns_destruct_lock, flags);
+	list_add(&afnetns->destruct_list, &afnetns_destruct_list);
+	spin_unlock_irqrestore(&afnetns_destruct_lock, flags);
+
+	queue_work(afnetns_wq, &afnetns_destruct_work);
 }
 EXPORT_SYMBOL(afnetns_destruct);
 
 void afnetns_destruct_owned(struct afnetns *afnetns)
 {
+	struct perafnet_operations *ops;
+
 	WARN_ON_ONCE(!afnetns->owned);
 	WARN_ON_ONCE(refcount_read(&afnetns->ref) != 1);
+
+	mutex_lock(&afnet_mutex);
+	list_for_each_entry(ops, &afnetns_ops_list, list)
+		ops->exit_batch();
+	mutex_unlock(&afnet_mutex);
 
 	ns_free_inum(&afnetns->ns);
 	put_user_ns(afnetns->user_ns);
@@ -196,6 +257,10 @@ int __init afnet_ns_init(void)
 	afnet_cache = kmem_cache_create("afnet_namespace",
 					sizeof(struct afnetns), SMP_CACHE_BYTES,
 					SLAB_PANIC, NULL);
+
+	afnetns_wq = create_singlethread_workqueue("afnetns");
+	if (!afnetns_wq)
+		panic("Could not create afnetns workq");
 
 	err = afnetns_setup(&init_afnet, &init_net, &init_user_ns, true);
 	if (err)

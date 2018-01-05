@@ -1109,7 +1109,7 @@ static void __net_exit dccp_v6_exit_net(struct net *net)
 
 static void __net_exit dccp_v6_exit_batch(struct list_head *net_exit_list)
 {
-	inet_twsk_purge(&dccp_hashinfo, AF_INET6);
+	inet_twsk_purge(&dccp_hashinfo, AF_INET6, false);
 }
 
 static struct pernet_operations dccp_v6_ops = {
@@ -1117,6 +1117,17 @@ static struct pernet_operations dccp_v6_ops = {
 	.exit   = dccp_v6_exit_net,
 	.exit_batch = dccp_v6_exit_batch,
 };
+
+#ifdef CONFIG_AFNETNS
+static void dccpv6_afnet_exit_batch(void)
+{
+	inet_twsk_purge(&dccp_hashinfo, AF_INET6, true);
+}
+
+static struct perafnet_operations dccpv6_afnet_ops = {
+	.exit_batch = dccpv6_afnet_exit_batch,
+};
+#endif
 
 static int __init dccp_v6_init(void)
 {
@@ -1131,6 +1142,10 @@ static int __init dccp_v6_init(void)
 	if (err)
 		goto out_destroy_ctl_sock;
 
+#ifdef CONFIG_AFNETNS
+	afnetns_ops_register(&dccpv6_afnet_ops);
+#endif
+
 	err = inet6_add_protocol(&dccp_v6_protocol, IPPROTO_DCCP);
 	if (err)
 		goto out_unregister_proto;
@@ -1138,6 +1153,9 @@ static int __init dccp_v6_init(void)
 out:
 	return err;
 out_unregister_proto:
+#ifdef CONFIG_AFNETNS
+	afnetns_ops_unregister(&dccpv6_afnet_ops);
+#endif
 	unregister_pernet_subsys(&dccp_v6_ops);
 out_destroy_ctl_sock:
 	inet6_unregister_protosw(&dccp_v6_protosw);
@@ -1148,6 +1166,9 @@ out_destroy_ctl_sock:
 static void __exit dccp_v6_exit(void)
 {
 	inet6_del_protocol(&dccp_v6_protocol, IPPROTO_DCCP);
+#ifdef CONFIG_AFNETNS
+	afnetns_ops_unregister(&dccpv6_afnet_ops);
+#endif
 	unregister_pernet_subsys(&dccp_v6_ops);
 	inet6_unregister_protosw(&dccp_v6_protosw);
 	proto_unregister(&dccp_v6_prot);
