@@ -2562,7 +2562,7 @@ static void __net_exit tcp_sk_exit_batch(struct list_head *net_exit_list)
 {
 	struct net *net;
 
-	inet_twsk_purge(&tcp_hashinfo, AF_INET);
+	inet_twsk_purge(&tcp_hashinfo, AF_INET, false);
 
 	list_for_each_entry(net, net_exit_list, exit_list)
 		tcp_fastopen_ctx_destroy(net);
@@ -2574,8 +2574,22 @@ static struct pernet_operations __net_initdata tcp_sk_ops = {
        .exit_batch = tcp_sk_exit_batch,
 };
 
+#ifdef CONFIG_AFNETNS
+static void tcp_afnet_exit_batch(void)
+{
+	inet_twsk_purge(&tcp_hashinfo, AF_INET, true);
+}
+
+static struct perafnet_operations tcp_afnet_ops = {
+	.exit_batch = tcp_afnet_exit_batch,
+};
+#endif
+
 void __init tcp_v4_init(void)
 {
+#ifdef CONFIG_AFNETNS
+	afnetns_ops_register(&tcp_afnet_ops);
+#endif
 	if (register_pernet_subsys(&tcp_sk_ops))
 		panic("Failed to create the TCP control socket.\n");
 }

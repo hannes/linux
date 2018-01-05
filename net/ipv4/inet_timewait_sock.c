@@ -183,7 +183,11 @@ struct inet_timewait_sock *inet_twsk_alloc(const struct sock *sk,
 		tw->tw_transparent  = inet->transparent;
 		tw->tw_prot	    = sk->sk_prot_creator;
 		atomic64_set(&tw->tw_cookie, atomic64_read(&sk->sk_cookie));
-		twsk_net_set(tw, sock_net(sk));
+#ifdef CONFIG_AFNETNS
+		tw->tw_afnet = sock_afnet(sk);
+#else
+		write_pnet(&tw->tw_net, sock_net(sk));
+#endif
 		timer_setup(&tw->tw_timer, tw_timer_handler, TIMER_PINNED);
 		/*
 		 * Because we use RCU lookups, we should not set tw_refcnt
@@ -252,7 +256,7 @@ void __inet_twsk_schedule(struct inet_timewait_sock *tw, int timeo, bool rearm)
 }
 EXPORT_SYMBOL_GPL(__inet_twsk_schedule);
 
-void inet_twsk_purge(struct inet_hashinfo *hashinfo, int family)
+void inet_twsk_purge(struct inet_hashinfo *hashinfo, int family, bool afnet)
 {
 	struct inet_timewait_sock *tw;
 	struct sock *sk;
@@ -266,18 +270,29 @@ restart_rcu:
 		rcu_read_lock();
 restart:
 		sk_nulls_for_each_rcu(sk, node, &head->chain) {
+			const refcount_t *refcnt;
+
 			if (sk->sk_state != TCP_TIME_WAIT)
 				continue;
 			tw = inet_twsk(sk);
+
+#ifdef CONFIG_AFNETNS
+			refcnt = afnet ? &tw->tw_afnet->ref
+				       : &twsk_net(tw)->count;
+#else
+			(void)afnet;
+			refcnt = &twsk_net(tw)->count;
+#endif
+
 			if ((tw->tw_family != family) ||
-				refcount_read(&twsk_net(tw)->count))
+			    refcount_read(refcnt))
 				continue;
 
 			if (unlikely(!refcount_inc_not_zero(&tw->tw_refcnt)))
 				continue;
 
 			if (unlikely((tw->tw_family != family) ||
-				     refcount_read(&twsk_net(tw)->count))) {
+			             refcount_read(refcnt))) {
 				inet_twsk_put(tw);
 				goto restart;
 			}

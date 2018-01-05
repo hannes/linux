@@ -6142,7 +6142,11 @@ struct request_sock *inet_reqsk_alloc(const struct request_sock_ops *ops,
 #endif
 		atomic64_set(&ireq->ir_cookie, 0);
 		ireq->ireq_state = TCP_NEW_SYN_RECV;
+#ifdef CONFIG_AFNETNS
+		ireq->ireq_afnet = sock_afnet(sk_listener);
+#else
 		write_pnet(&ireq->ireq_net, sock_net(sk_listener));
+#endif
 		ireq->ireq_family = sk_listener->sk_family;
 	}
 
