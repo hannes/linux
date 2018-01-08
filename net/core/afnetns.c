@@ -11,6 +11,8 @@ const struct proc_ns_operations afnetns_operations;
 struct afnetns init_afnet = {
 	.owned = true,
 	.ref = REFCOUNT_INIT(1),
+	.net = &init_net,
+	.user_ns = &init_user_ns,
 };
 
 static struct afnetns *ns_to_afnet(struct ns_common *ns)
@@ -28,10 +30,12 @@ static int afnetns_setup(struct afnetns *afnetns, struct net *net,
 	if (err)
 		return err;
 
-	afnetns->owned = owned;
-	refcount_set(&afnetns->ref, 1);
-	afnetns->net = owned ? net : get_net(net);
-	afnetns->user_ns = get_user_ns(user_ns);
+	if (afnetns != &init_afnet) {
+		afnetns->owned = owned;
+		refcount_set(&afnetns->ref, 1);
+		afnetns->net = owned ? net : get_net(net);
+		afnetns->user_ns = get_user_ns(user_ns);
+	}
 
 	return err;
 }
